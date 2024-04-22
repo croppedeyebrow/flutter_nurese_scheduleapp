@@ -1,8 +1,8 @@
-// nurse_schedule_page.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:math';
 import '../models/nurse.dart';
 import '../models/work_schedule.dart';
+import '../models/work_schedule_storage.dart';
 
 class NurseSchedulePage extends StatefulWidget {
   final Nurse nurse;
@@ -13,25 +13,46 @@ class NurseSchedulePage extends StatefulWidget {
   _NurseSchedulePageState createState() => _NurseSchedulePageState();
 }
 
-class _NurseSchedulePageState extends State<NurseSchedulePage> {
-  late List<String> nurseSchedule;
+class _NurseSchedulePageState extends State<NurseSchedulePage>
+    with AutomaticKeepAliveClientMixin {
+  List<String>? nurseSchedule;
   int selectedMonth = 1;
   int selectedOffDays = 6;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _generateWorkSchedule();
+    _loadWorkSchedule(); // 페이지 로드시 저장된 근무표 불러오기
   }
 
-  void _generateWorkSchedule() {
+  void _generateAndSaveWorkSchedule() async {
     WorkSchedule workSchedule = WorkSchedule();
-    nurseSchedule =
-        workSchedule.generateWorkSchedule(selectedMonth, selectedOffDays);
+    List<String> schedule = workSchedule.generateWorkSchedule(
+        DateTime.now().year, selectedMonth, selectedOffDays);
+    await WorkScheduleStorage.saveWorkSchedule(schedule); // 생성된 일정을 저장
+    setState(() {
+      nurseSchedule = schedule; // 근무표 갱신
+    });
+  }
+
+  void _loadWorkSchedule() async {
+    List<String>? savedSchedule = await WorkScheduleStorage.loadWorkSchedule();
+    if (savedSchedule != null) {
+      setState(() {
+        nurseSchedule = savedSchedule; // 저장된 일정 불러오기
+      });
+    } else {
+      _generateAndSaveWorkSchedule(); // 저장된 일정이 없으면 새로 생성 후 저장
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.nurse.name} Schedule'),
@@ -55,7 +76,7 @@ class _NurseSchedulePageState extends State<NurseSchedulePage> {
                 onChanged: (value) {
                   setState(() {
                     selectedMonth = value!;
-                    _generateWorkSchedule();
+                    _generateAndSaveWorkSchedule(); // 선택된 달이 변경될 때마다 근무표 생성 후 저장
                   });
                 },
               ),
@@ -77,7 +98,7 @@ class _NurseSchedulePageState extends State<NurseSchedulePage> {
                 onChanged: (value) {
                   setState(() {
                     selectedOffDays = value!;
-                    _generateWorkSchedule();
+                    _generateAndSaveWorkSchedule(); // 선택된 휴무일수가 변경될 때마다 근무표 생성 후 저장
                   });
                 },
               ),
@@ -89,7 +110,7 @@ class _NurseSchedulePageState extends State<NurseSchedulePage> {
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 7,
               ),
-              itemCount: nurseSchedule.length,
+              itemCount: nurseSchedule?.length ?? 0,
               itemBuilder: (BuildContext context, int index) {
                 return Container(
                   decoration: BoxDecoration(
@@ -97,12 +118,12 @@ class _NurseSchedulePageState extends State<NurseSchedulePage> {
                   ),
                   child: Center(
                     child: Text(
-                      nurseSchedule[index],
+                      nurseSchedule?[index] ?? '',
                       style: TextStyle(
-                        fontWeight: nurseSchedule[index] == 'Off'
+                        fontWeight: nurseSchedule?[index] == 'Off'
                             ? FontWeight.normal
                             : FontWeight.bold,
-                        color: nurseSchedule[index] == 'Off'
+                        color: nurseSchedule?[index] == 'Off'
                             ? Colors.grey
                             : Colors.black,
                       ),
